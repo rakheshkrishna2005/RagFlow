@@ -104,10 +104,10 @@ class RunRequest(BaseModel):
     Request model for the RAG pipeline execution.
     
     Attributes:
-        documents: URL or file path to PDF document
-        questions: List of questions to answer about the document
+        documents: List of URLs or file paths to PDF documents
+        questions: List of questions to answer about the documents
     """
-    documents: str
+    documents: List[str]
     questions: List[str]
 
 class SearchQuery(BaseModel):
@@ -401,25 +401,27 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
 
         # Document loading and text extraction
         try:
-            # Handle remote PDF URLs
-            if request.documents.startswith(('http://', 'https://')):
-                print("📑 » Loading PDF from web source")
-                response = requests.get(request.documents)
-                response.raise_for_status()
-                pdf = PdfReader(BytesIO(response.content))
-                print("✨ » PDF loaded successfully")
-            else:
-                # Handle local file paths
-                print(f"\nReading local PDF: {request.documents}")
-                pdf = PdfReader(request.documents)
-                
-            # Extract text content from all PDF pages
             full_text = ""
-            for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+            for doc_url in request.documents:
+                # Handle remote PDF URLs
+                if doc_url.startswith(('http://', 'https://')):
+                    print(f"📑 » Loading PDF from web source: {doc_url}")
+                    response = requests.get(doc_url)
+                    response.raise_for_status()
+                    pdf = PdfReader(BytesIO(response.content))
+                    print("✨ » PDF loaded successfully")
+                else:
+                    # Handle local file paths
+                    print(f"\nReading local PDF: {doc_url}")
+                    pdf = PdfReader(doc_url)
+                
+                # Extract text content from all PDF pages
+                for page in pdf.pages:
+                    full_text += page.extract_text() + "\n\n--- New Document ---\n\n"
             
-            # Process document and build search indices
-            await add_to_index(full_text)
+            # Process combined documents and build search indices
+            if full_text:
+                await add_to_index(full_text)
             
         except requests.RequestException as e:
             logger.error(f"PDF download failed: {str(e)}")
