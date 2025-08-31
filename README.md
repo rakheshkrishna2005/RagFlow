@@ -1,4 +1,4 @@
-# 🚀 RagFlow
+# 🚀 RagFlow API + Client
 
 RagFlow is a Retrieval Augmented Generation (RAG) API that processes PDF documents and answers questions using advanced language models.
 
