@@ -26,6 +26,10 @@ jobs:
         pip install -r API/requirements.txt
 
     - name: Run tests (placeholder)
+      env:
+        GOOGLE_API_KEY: ""
+        GROQ_API_KEY: ""
+        API_KEY: ""
       run: |
         python -c "from API.api_server import app"
 
