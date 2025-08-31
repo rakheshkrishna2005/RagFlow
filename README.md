@@ -113,6 +113,24 @@ Processes one or more documents and answers a list of questions using the RAG pi
 }
 ```
 
+#### Using Curl
+
+```bash
+curl -X 'POST' \
+  'https://ragflow-zhoa.onrender.com/v1/run' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer <api_key>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "documents": [
+    "https://arxiv.org/pdf/2005.11401.pdf"
+  ],
+  "questions": [
+    "What are the two types of RAG models and how do they differ?"
+  ]
+}'
+```
+
 #### Example Logs
 
 ```

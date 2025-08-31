@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi import APIRouter, FastAPI, HTTPException, Security, Depends, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -50,8 +51,18 @@ import langchain_core
 langchain_core.llm_cache = InMemoryCache()
 langchain_core.embeddings_cache = InMemoryCache()
 
+# Rate limiting setup
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
+
+
 # Initialize FastAPI application with metadata
 app = FastAPI(title="RAG API Server")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # HTTP Bearer token security scheme
 security = HTTPBearer()
@@ -77,13 +88,17 @@ async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(sec
         )
     return credentials.credentials
 
+# API v1 router
+v1_router = APIRouter(prefix="/v1")
+
 # Configure CORS middleware for cross-origin requests
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Initialize external service clients
@@ -245,6 +260,32 @@ async def ask_llm(query: str, context_chunks: List[str]) -> str:
     return answer
 
 # ========================================================================================
+# Error Handlers
+# ========================================================================================
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Custom handler for HTTPException to ensure consistent JSON error responses.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """
+    Generic exception handler to catch any unhandled exceptions and return a
+    standardized 500 Internal Server Error response.
+    """
+    logger.error(f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred. Please try again later."},
+    )
+
+# ========================================================================================
 # API Endpoints
 # ========================================================================================
 
@@ -284,8 +325,9 @@ async def root():
         }
     }
 
-@app.post("/run")
-async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_key)):
+@v1_router.post("/run")
+@limiter.limit("5/minute")
+async def run_pipeline(run_request: RunRequest, request: Request, api_key: str = Depends(verify_api_key)):
     """
     Main RAG pipeline endpoint for document processing and question answering.
     
@@ -309,7 +351,7 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
     """
     try:
         # Log request initiation for production monitoring
-        if request.documents:
+        if run_request.documents:
             start_time = time.time()
             print("\n🚀 » New request received from client")
         
@@ -322,7 +364,7 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
         # Document loading and text extraction
         try:
             full_text = ""
-            for doc_url in request.documents:
+            for doc_url in run_request.documents:
                 # Handle remote PDF URLs
                 if doc_url.startswith(('http://', 'https://')):
                     print(f"📑 » Loading PDF from web source: {doc_url}")
@@ -352,7 +394,7 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
         
         # Process questions through RAG pipeline
         answers = []
-        for idx, question in enumerate(request.questions, start=1):
+        for idx, question in enumerate(run_request.questions, start=1):
             # Retrieve relevant context using hybrid search
             retrieved_chunks = await hybrid_search(question, TOP_K)
             # Generate answer using LLM with retrieved context
@@ -372,6 +414,8 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
 # ========================================================================================
 # Application Entry Point
 # ========================================================================================
+
+app.include_router(v1_router)
 
 if __name__ == "__main__":
     """
