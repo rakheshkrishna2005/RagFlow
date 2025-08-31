@@ -457,10 +457,10 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
 
 if __name__ == "__main__":
     """
-    Development server entry point.
-    
-    For production deployment, use a WSGI server like Gunicorn or Uvicorn
-    with appropriate worker configuration and process management.
+    Production server entry point for Render deployment.
+    Uses PORT environment variable provided by Render.
     """
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import os
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

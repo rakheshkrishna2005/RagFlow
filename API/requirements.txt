@@ -4,9 +4,9 @@ google-generativeai
 groq
 pypdf
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 tenacity
 scikit-learn
 pydantic
-python-dotenv
+requests
