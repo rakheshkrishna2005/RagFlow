@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL", "https://ragflow-zhoa.onrender.com")
+API_URL = os.getenv("API_URL", "https://rag-flow.onrender.com")
 API_KEY = os.getenv("API_KEY")
 
 st.set_page_config(

@@ -306,7 +306,7 @@ async def root():
                 "method": "GET",
                 "description": "Get API information"
             },
-            "/run": {
+            "/v1/run": {
                 "method": "POST",
                 "description": "Process documents and answer questions using RAG",
                 "authentication": "Bearer token required",
