@@ -29,7 +29,7 @@ def make_api_request(documents: List[str], questions: List[str]) -> Dict:
     data = {"documents": documents, "questions": questions}
 
     try:
-        response = requests.post(f"{API_URL}/run", headers=headers, json=data)
+        response = requests.post(f"{API_URL}/v1/run", headers=headers, json=data)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
