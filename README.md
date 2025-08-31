@@ -4,15 +4,15 @@ RagFlow is a Retrieval Augmented Generation (RAG) API that processes PDF documen
 
 ## 📑 Table of Contents
 
-- [✨ Features](#-features)
-- [🛠️ Tech Stack](#️-tech-stack)
-- [🔄 RAG Pipeline Architecture](#-rag-pipeline-architecture)
-- [⚙️ System Configuration](#️-system-configuration)
-- [🔑 Environment Variables](#-environment-variables)
-- [🔐 Authentication](#-authentication)
-- [📡 API Endpoints](#-api-endpoints)
-- [❌ Error Responses](#-error-responses)
-- [⚡️ Performance & Rate Limiting](#️-performance--rate-limiting)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [RAG Pipeline Architecture](#rag-pipeline-architecture)
+- [System Configuration](#system-configuration)
+- [Environment Variables](#environment-variables)
+- [Authentication](#authentication)
+- [API Endpoints](#api-endpoints)
+- [Error Responses](#error-responses)
+- [Performance & Rate Limiting](#performance--rate-limiting)
 
 ## ✨ Features
 

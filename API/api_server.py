@@ -302,10 +302,6 @@ async def root():
         "version": "1.0.0",
         "description": "A REST API for Question Answering using RAG (Retrieval Augmented Generation)",
         "endpoints": {
-            "/": {
-                "method": "GET",
-                "description": "Get API information"
-            },
             "/v1/run": {
                 "method": "POST",
                 "description": "Process documents and answer questions using RAG",
