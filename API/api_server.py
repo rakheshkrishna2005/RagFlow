@@ -350,8 +350,8 @@ async def root():
                 "description": "Process documents and answer questions using RAG",
                 "authentication": "Bearer token required",
                 "request_format": {
-                    "documents": "URL or path to PDF file",
-                    "questions": ["List of questions to answer"]
+                    "documents": ["List of URLs or paths to PDF files"],
+                    "questions": ["List of questions to answer about the documents"]
                 },
                 "response_format": {
                     "answers": ["List of answers corresponding to the questions"]
