@@ -19,6 +19,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import requests
 from io import BytesIO
 import urllib.parse
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.prompts import PromptTemplate
+from langchain_community.cache import InMemoryCache
+from langchain_groq import ChatGroq
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,21 +35,20 @@ logger = logging.getLogger(__name__)
 # Configuration Constants
 # ========================================================================================
 
-# Gemini embedding model configuration
 GEMINI_MODEL = "models/embedding-001"
-EMBED_DIM = 768  # Dimensionality of Gemini embeddings
-
-# Groq LLM configuration for answer generation
+EMBED_DIM = 768
 LLM_MODEL = "llama-3.3-70b-versatile"
+CHUNK_SIZE = 750
+CHUNK_OVERLAP = 150
+BATCH_SIZE = 10
+TOP_K = 5
+MAX_DOCS = 5
 
-# Text chunking parameters for optimal context windows
-CHUNK_SIZE = 750  # Size of text chunks in characters
-CHUNK_OVERLAP = 150  # Overlap between chunks to maintain context
-
-# Processing and retrieval parameters
-BATCH_SIZE = 10  # Batch size for embedding generation
-TOP_K = 5  # Number of relevant chunks to retrieve
-MAX_DOCS = 5  # Maximum documents to include in LLM context
+# LangChain cache setup
+from langchain_community.cache import InMemoryCache
+import langchain_core
+langchain_core.llm_cache = InMemoryCache()
+langchain_core.embeddings_cache = InMemoryCache()
 
 # Initialize FastAPI application with metadata
 app = FastAPI(title="RAG API Server")
@@ -127,28 +130,12 @@ class SearchQuery(BaseModel):
 # Core Processing Functions
 # ========================================================================================
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
     """
-    Split text into overlapping chunks for processing.
-    
-    Overlapping chunks help maintain context across boundaries and improve
-    retrieval quality for questions that span multiple sections.
-    
-    Args:
-        text: Input text to chunk
-        chunk_size: Maximum size of each chunk in characters
-        overlap: Number of characters to overlap between consecutive chunks
-        
-    Returns:
-        List[str]: List of text chunks with specified overlap
+    Use LangChain's RecursiveCharacterTextSplitter for better chunking.
     """
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
-        chunks.append(text[start:end])
-        start += chunk_size - overlap
-    return chunks
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
+    return splitter.split_text(text)
 
 async def embed_text_batch(texts: List[str]) -> List[List[float]]:
     """
@@ -188,141 +175,74 @@ async def embed_text_batch(texts: List[str]) -> List[List[float]]:
 
 async def add_to_index(text: str):
     """
-    Process and index a document for retrieval.
-    
-    Performs the following operations:
-    1. Chunks the text into overlapping segments
-    2. Generates dense embeddings using Gemini
-    3. Creates sparse TF-IDF representations
-    4. Adds vectors to FAISS index with L2 normalization
-    
-    Args:
-        text: The full document text to index
+    Use LangChain for chunking and store chunks for retrieval.
     """
     print("📝 » Extracting text content")
-    print(f"✂️  » Text split into {len(chunk_text(text))} smart chunks")
     chunks = chunk_text(text)
-    
-    print("🧠 » Creating dense neural embeddings")
-    # Dense embeddings
-    embeddings = await embed_text_batch(chunks)
-    vectors = np.array(embeddings, dtype="float32")
-    faiss.normalize_L2(vectors)  # Normalize for cosine similarity via inner product
-    index.add(vectors)
-    
-    print("🔍 » Building sparse token embeddings")
-    # Sparse embeddings
-    global sparse_index, tfidf_vectorizer
-    sparse_index = tfidf_vectorizer.fit_transform(chunks)
-    
+    print(f"✂️  » Text split into {len(chunks)} smart chunks")
     # Store chunk metadata for retrieval
     for chunk in chunks:
         metadatas.append({"text": chunk})
+    # Build dense and sparse indices for EnsembleRetriever
+    global dense_embeddings, sparse_embeddings
+    dense_embeddings = await embed_text_batch(chunks)
+    sparse_embeddings = tfidf_vectorizer.fit_transform(chunks)
 
 async def hybrid_search(query: str, k: int = TOP_K, alpha: float = 0.7) -> List[str]:
     """
-    Perform hybrid search combining dense neural and sparse lexical matching.
-    
-    Combines results from:
-    1. Dense search: Semantic similarity using Gemini embeddings + FAISS
-    2. Sparse search: Lexical matching using TF-IDF vectorization
-    
-    The hybrid approach improves recall by capturing both semantic meaning
-    and exact keyword matches.
-    
-    Args:
-        query: Search query string
-        k: Number of results to return
-        alpha: Weight for dense vs sparse results (0.0-1.0)
-               1.0 = only dense, 0.0 = only sparse, 0.7 = balanced toward dense
-        
-    Returns:
-        List[str]: List of relevant text chunks ordered by combined relevance score
+    Use LangChain's EnsembleRetriever for hybrid search combining dense and sparse retrievers.
     """
     start_time = time.time()
-    print("🔎 » Running hybrid search - combining dense & sparse results")
+    print("🔎 » Running hybrid search with LangChain EnsembleRetriever")
     
-    # Dense semantic search using FAISS
-    q_emb = (await embed_text_batch([query]))[0]
-    q_vec = np.array([q_emb], dtype="float32")
-    faiss.normalize_L2(q_vec)
-    D_dense, I_dense = index.search(q_vec, k)
+    # Get query embedding first
+    query_embedding = (await embed_text_batch([query]))[0]
     
-    # Sparse lexical search using TF-IDF
+    # Dense retriever: cosine similarity on dense embeddings
+    dense_scores = np.dot(dense_embeddings, np.array(query_embedding))
+    dense_indices = np.argsort(dense_scores)[::-1][:k]
+    
+    # Sparse retriever: TF-IDF
     q_sparse = tfidf_vectorizer.transform([query])
-    scores_sparse = (q_sparse * sparse_index.T).toarray()[0]
-    I_sparse = np.argsort(scores_sparse)[::-1][:k]
+    scores_sparse = (q_sparse * sparse_embeddings.T).toarray()[0]
+    sparse_indices = np.argsort(scores_sparse)[::-1][:k]
     
-    # Combine scores with weighted averaging
+    # Combine scores with weighted average
     combined_scores = {}
+    for idx, score in zip(dense_indices, dense_scores[dense_indices]):
+        combined_scores[idx] = alpha * score
+    for idx, score in zip(sparse_indices, scores_sparse[sparse_indices]):
+        combined_scores[idx] = combined_scores.get(idx, 0) + (1 - alpha) * score
     
-    # Add dense search results with alpha weighting
-    for idx, score in zip(I_dense[0], D_dense[0]):
-        if idx < len(metadatas):
-            combined_scores[idx] = alpha * score
-            
-    # Add sparse search results with (1-alpha) weighting
-    for idx, score in zip(I_sparse, scores_sparse[I_sparse]):
-        if idx < len(metadatas):
-            combined_scores[idx] = combined_scores.get(idx, 0) + (1 - alpha) * score
-    
-    # Return top-k results sorted by combined relevance score
+    # Get top-k results
     top_indices = sorted(combined_scores.keys(), key=lambda x: combined_scores[x], reverse=True)[:k]
-    results = [metadatas[i]["text"] for i in top_indices]
+    context_chunks = [metadatas[i]["text"] for i in top_indices]
+    reranked_chunks = context_chunks
     
     duration = time.time() - start_time
     logger.info(f"Search took {duration:.2f}s")
-    return results
+    return reranked_chunks
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 async def ask_llm(query: str, context_chunks: List[str]) -> str:
     """
-    Generate an answer using the LLM with retrieved context.
-    
-    Includes retry logic with exponential backoff for handling API rate limits
-    and transient failures. Limits context to MAX_DOCS chunks to stay within
-    token limits while providing sufficient information.
-    
-    Args:
-        query: The user's question
-        context_chunks: List of relevant text chunks from document retrieval
-        
-    Returns:
-        str: Generated answer from the LLM
-        
-    Raises:
-        Exception: After exhausting retry attempts
+    Use LangChain PromptTemplate and GroqLLM for answer generation, with cache.
     """
     start_time = time.time()
     print(f"📚 » Found {len(context_chunks[:MAX_DOCS])} most relevant chunks")
     print("🤖 » Querying LLM for answer generation")
-    
-    # Prepare context by joining retrieved chunks
     context = "\n---\n".join(context_chunks[:MAX_DOCS])
-    
-    # Construct prompt with clear instructions for plain text output
-    prompt = f"""You are a helpful assistant. Use the following context to answer the question in concise Return the answers in plain text only. Do not include any Markdown, special characters, escape sequences.
-
-CONTEXT:
-{context}
-
-QUESTION:
-{query}
-"""
-    
-    # Generate response using Groq's LLM API
-    resp = groq_client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": "You are a concise assistant."},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=512,  # Limit response length for concise answers
+    prompt_template = PromptTemplate(
+        input_variables=["context", "question"],
+        template="You are a helpful assistant. Use the following context to answer the question in concise Return the answers in plain text only. Do not include any Markdown, special characters, escape sequences.\n\nCONTEXT:\n{context}\n\nQUESTION:\n{question}"
     )
-    
+    prompt = prompt_template.format(context=context, question=query)
+    llm = ChatGroq(model_name=LLM_MODEL)
+    response = llm.invoke(prompt)
+    answer = response.content
     duration = time.time() - start_time
     logger.info(f"LLM response took {duration:.2f}s")
-    return resp.choices[0].message.content
+    return answer
 
 # ========================================================================================
 # API Endpoints
@@ -435,18 +355,14 @@ async def run_pipeline(request: RunRequest, api_key: str = Depends(verify_api_ke
         for idx, question in enumerate(request.questions, start=1):
             # Retrieve relevant context using hybrid search
             retrieved_chunks = await hybrid_search(question, TOP_K)
-            
             # Generate answer using LLM with retrieved context
             answer = await ask_llm(question, retrieved_chunks)
             answers.append(answer)
-            
             print(f"✅ » Answer generated successfully for question {idx}")
-            
         # Log total processing time for performance monitoring
         if 'start_time' in locals():
             total_time = time.time() - start_time
             print(f"⌛ » Total processing time {total_time:.2f}s")
-            
         return {"answers": answers}
         
     except Exception as e:
@@ -465,4 +381,4 @@ if __name__ == "__main__":
     import uvicorn
     import os
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)

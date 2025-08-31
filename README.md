@@ -3,308 +3,146 @@
 RagFlow is a Retrieval Augmented Generation (RAG) API that processes PDF documents and answers questions using advanced language models.
 
 ## 📑 Table of Contents
+
 - [✨ Features](#-features)
 - [🛠️ Tech Stack](#️-tech-stack)
 - [🔄 RAG Pipeline Architecture](#-rag-pipeline-architecture)
+- [⚙️ System Configuration](#️-system-configuration)
 - [🔑 Environment Variables](#-environment-variables)
 - [🔐 Authentication](#-authentication)
 - [📡 API Endpoints](#-api-endpoints)
 - [❌ Error Responses](#-error-responses)
-- [⚡ Rate Limiting & Performance](#-rate-limiting--performance)
+- [⚡️ Performance & Rate Limiting](#️-performance--rate-limiting)
 
-## 🎯 Features
+## ✨ Features
 
-- Hybrid search combining dense and sparse embeddings
-- Support for both local PDF files and remote URLs
-- Automatic text chunking with overlap for context preservation
-- Parallel processing of document embeddings
-- Retry logic with exponential backoff for API calls
-- Comprehensive error handling and logging
+- **Hybrid Search**: Combines dense (semantic) and sparse (lexical) embeddings for superior retrieval accuracy.
+- **Flexible Document Loading**: Supports both local PDF files and remote URLs.
+- **Advanced Text Chunking**: Uses `LangChain`'s `RecursiveCharacterTextSplitter` for intelligent context-aware chunking.
+- **Optimized Performance**: Leverages parallel processing for embedding generation and includes caching for LLM and embedding lookups.
+- **Resilient API Calls**: Implements retry logic with exponential backoff for external service calls.
+- **Robust and Observable**: Features comprehensive error handling and structured logging for production monitoring.
 
 ## 🛠️ Tech Stack
 
-### 🔧 Backend Framework and API
-- FastAPI - High-performance async web framework
-- Uvicorn - ASGI server implementation
-- CORS middleware for cross-origin support
-
-### 🧠 Machine Learning and Embeddings
-- Google's Gemini model (models/embedding-001) for document embeddings
-- Groq LLM (llama-3.3-70b-versatile) for answer generation
-- FAISS for efficient similarity search using cosine similarity
-- TF-IDF vectorizer for sparse lexical matching
-- NumPy for numerical operations and vector manipulations
-
-### 📄 Document Processing
-- PyPDF2 for PDF text extraction
-- Custom text chunking with configurable overlap
-- Parallel processing using ThreadPoolExecutor and asyncio
-
-### 🛠️ Utilities and Error Handling
-- Python-dotenv for environment management
-- Tenacity for retry logic and backoff
-- Pydantic for request/response validation
-- Logging for production monitoring
+- **Backend**: FastAPI, Uvicorn
+- **Data Validation**: Pydantic
+- **Document Processing**: `pypdf` for text extraction.
+- **ML/RAG Orchestration**: `LangChain` for text splitting, prompts, and LLM integration.
+- **Embeddings**: Google's Gemini (`models/embedding-001`).
+- **LLM**: Groq via `LangChain` (`llama-3.3-70b-versatile`).
+- **Vector Search**: `faiss` for efficient similarity search.
+- **Sparse Retrieval**: `scikit-learn`'s `TfidfVectorizer`.
+- **Utilities**: `numpy`, `python-dotenv`, `tenacity`.
 
 ## 🔄 RAG Pipeline Architecture
 
-### 1. Document Ingestion
-- Supports both local PDF files and remote URLs
-- Extracts text content from PDF documents
-- Splits text into overlapping chunks (750 chars with 150 char overlap)
+1.  **Document Ingestion**: Loads PDF documents from local paths or URLs and extracts text using `pypdf`.
+2.  **Text Chunking**: Splits the extracted text into smaller, overlapping chunks using `LangChain`'s `RecursiveCharacterTextSplitter` to maintain semantic context.
+3.  **Embedding Generation**: Creates two types of embeddings for hybrid search:
+    -   **Dense Embeddings**: Generated using the Gemini model for capturing semantic meaning.
+    -   **Sparse Embeddings**: Generated using TF-IDF for lexical matching.
+4.  **Hybrid Search**: Combines dense and sparse search results with a weighted alpha to retrieve the most relevant text chunks for a given query.
+5.  **Answer Generation**: Uses a `LangChain` prompt template to combine the user's question with the retrieved context. The `ChatGroq` LLM then generates a concise, plain-text answer.
+6.  **Caching**: Implements `InMemoryCache` from `LangChain` for both LLM responses and embeddings to speed up repeated queries.
 
-### 2. Embedding Generation
-- Processes text chunks in parallel using ThreadPoolExecutor
-- Generates dense embeddings using Google's Gemini model
-- Creates sparse embeddings using TF-IDF vectorization
-- Normalizes vectors using L2 normalization for cosine similarity
+## ⚙️ System Configuration
 
-### 3. Hybrid Search
-- Combines dense and sparse search methods:
-  - Dense: Semantic search using FAISS (Inner Product similarity)
-  - Sparse: Lexical matching using TF-IDF
-- Weighted combination (default: 0.7 dense, 0.3 sparse)
-- Returns top K most relevant chunks (default: K=5)
-
-### 4. Answer Generation
-- Takes user question and retrieved context chunks
-- Limited to 5 most relevant chunks for context window management
-- Uses Groq's LLM for answer generation
-- Implements retry logic with exponential backoff
-- Returns concise, plain text answers
-
-### 5. Performance Optimizations
-- Parallel processing of document embeddings
-- Efficient vector similarity search with FAISS
-- Automatic chunking for optimal context windows
-- Request/response validation using Pydantic
-- Comprehensive error handling and logging
-
-### ⚙️ System Configuration
 ```python
 # Embedding Configuration
-EMBED_DIM = 768  # Dimensionality of Gemini embeddings
+EMBED_DIM = 768        # Dimensionality of Gemini embeddings
 
 # Text Chunking Parameters
-CHUNK_SIZE = 750  # Characters per chunk
-CHUNK_OVERLAP = 150  # Overlap between chunks
+CHUNK_SIZE = 750       # Characters per chunk
+CHUNK_OVERLAP = 150    # Overlap between chunks
 
-# Processing Parameters
-BATCH_SIZE = 10  # Batch size for embedding generation
-TOP_K = 5  # Number of relevant chunks to retrieve
-MAX_DOCS = 5  # Maximum chunks in LLM context
+# Retrieval & Generation Parameters
+TOP_K = 5              # Number of relevant chunks to retrieve
+MAX_DOCS = 5           # Maximum chunks to include in LLM context
+HYBRID_ALPHA = 0.7     # Weight for dense search in hybrid retrieval
 ```
 
 ## 🔑 Environment Variables
 
-### API Server (.env)
-```env
-API_KEY=your_api_key_here
-GOOGLE_API_KEY=your_google_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
-```
+Create a `.env` file in the root directory with the following variables:
 
-### Frontend (.env)
 ```env
-API_KEY=your_api_key_here
+API_KEY="your_secret_api_key"
+GOOGLE_API_KEY="your_google_api_key"
+GROQ_API_KEY="your_groq_api_key"
 ```
 
 ## 🔐 Authentication
 
-All API endpoints require Bearer token authentication.
+All protected API endpoints require Bearer token authentication. Include the API key in the `Authorization` header:
 
 ```http
-Authorization: Bearer your_api_key_here
+Authorization: Bearer your_secret_api_key
 ```
 
 ## 📡 API Endpoints
 
-### 📥 Get API Information
-```http
-GET /
-```
+### `GET /`
 
-#### 📤 Response
+Returns information about the API service, including its version and a description of available endpoints.
+
+### `POST /run`
+
+Processes one or more documents and answers a list of questions using the RAG pipeline.
+
+#### Request Body
+
 ```json
 {
-    "name": "RAG API Server",
-    "version": "1.0.0",
-    "description": "A REST API for Question Answering using RAG (Retrieval Augmented Generation)",
-    "endpoints": {
-        "/": {
-            "method": "GET",
-            "description": "Get API information"
-        },
-        "/run": {
-            "method": "POST",
-            "description": "Process documents and answer questions using RAG",
-            "authentication": "Bearer token required"
-        }
-    },
-    "components": {
-        "embedding_model": "models/embedding-001",
-        "llm_model": "llama-3.3-70b-versatile"
-    }
+  "documents": [
+    "https://arxiv.org/pdf/2005.11401.pdf"
+  ],
+  "questions": [
+    "What are the two types of RAG models and how do they differ?"
+  ]
 }
 ```
 
-### Logs
+#### Response Body
+
+```json
+{
+  "answers": [
+    "The two types of RAG models are RAG-Token and RAG-Sequence. RAG-Token models treat each token as a latent variable and can be trained end-to-end, while RAG-Sequence models treat each document as a latent variable and use a more straightforward training process. RAG-Sequence models generally outperform RAG-Token models on tasks like open-domain question answering."
+  ]
+}
+```
+
+#### Example Logs
+
 ```
 🚀 » New request received from client
 📑 » Loading PDF from web source: https://arxiv.org/pdf/2005.11401.pdf
 ✨ » PDF loaded successfully
-📑 » Loading PDF from web source: https://arxiv.org/pdf/1706.03762.pdf
-✨ » PDF loaded successfully
 📝 » Extracting text content
-✂️  » Text split into 137 smart chunks
-🧠 » Creating dense neural embeddings
-🔍 » Building sparse token embeddings
-🔎 » Running hybrid search - combining dense & sparse results
+✂️  » Text split into 114 smart chunks
+🔎 » Running hybrid search with LangChain EnsembleRetriever
 📚 » Found 5 most relevant chunks
 🤖 » Querying LLM for answer generation
 ✅ » Answer generated successfully for question 1
-🔎 » Running hybrid search - combining dense & sparse results
-📚 » Found 5 most relevant chunks
-🤖 » Querying LLM for answer generation
-✅ » Answer generated successfully for question 2
-⌛ » Total processing time 18.04s
+⌛ » Total processing time 8.45s
 ```
 
-### 🔄 Process Documents and Answer Questions
-```http
-POST /run
-```
+## ❌ Error Responses
 
-#### 📝 Request Body
-```json
-{
-  "documents": [
-    "https://arxiv.org/pdf/2005.11401.pdf",
-    "https://arxiv.org/pdf/1706.03762.pdf"
-  ],
-  "questions": [
-    "What are the two types of RAG models and how do they differ?",
-    "What key innovation does the Transformer introduce over previous sequence models?"
-  ]
-}
-```
+-   **401 Unauthorized**: Returned if the API key is missing or invalid.
+-   **500 Internal Server Error**: Returned for issues during document processing, embedding, or answer generation.
 
-#### Response
-```json
-{
-  "answers": [
-    "The two types of RAG models are RAG-Token and RAG-Sequence. They differ in their approach to generating text, with RAG-Token performing better on Jeopardy question generation and RAG-Sequence outperforming BART on Open MS-MARCO NLG.",
-    "The Transformer introduces self-attention as its key innovation, replacing recurrent or convolutional layers used in previous sequence models with multi-headed self-attention."
-  ]
-}
-```
-
-## Error Responses
-
-### 🚫 Authentication Error
 ```json
 {
     "detail": "Invalid API key"
 }
 ```
 
-### ❌ Processing Error
-```json
-{
-    "detail": "Error message describing what went wrong"
-}
-```
+## ⚡️ Performance & Rate Limiting
 
-## 📦 Features
+The API uses `tenacity` to implement an exponential backoff retry strategy for calls to the Groq LLM, making the system more resilient to transient failures.
 
-- Hybrid search combining dense and sparse embeddings
-- Support for both local PDF files and remote URLs
-- Automatic text chunking with overlap for context preservation
-- Parallel processing of document embeddings
-- Retry logic with exponential backoff for API calls
-- Comprehensive error handling and logging
-
-## 🤖 Technical Details
-
-### Tech Stack
-
-#### Backend Framework and API
-- FastAPI - High-performance async web framework
-- Uvicorn - ASGI server implementation
-- CORS middleware for cross-origin support
-
-#### Machine Learning and Embeddings
-- Google's Gemini model (models/embedding-001) for document embeddings
-- Groq LLM (llama-3.3-70b-versatile) for answer generation
-- FAISS for efficient similarity search using cosine similarity
-- TF-IDF vectorizer for sparse lexical matching
-- NumPy for numerical operations and vector manipulations
-
-#### Document Processing
-- PyPDF2 for PDF text extraction
-- Custom text chunking with configurable overlap
-- Parallel processing using ThreadPoolExecutor and asyncio
-
-#### Utilities and Error Handling
-- Python-dotenv for environment management
-- Tenacity for retry logic and backoff
-- Pydantic for request/response validation
-- Logging for production monitoring
-
-#### RAG Pipeline Architecture
-
-1. **Document Ingestion**
-   - Supports both local PDF files and remote URLs
-   - Extracts text content from PDF documents
-   - Splits text into overlapping chunks (750 chars with 150 char overlap)
-
-2. **Embedding Generation**
-   - Processes text chunks in parallel using ThreadPoolExecutor
-   - Generates dense embeddings using Google's Gemini model
-   - Creates sparse embeddings using TF-IDF vectorization
-   - Normalizes vectors using L2 normalization for cosine similarity
-
-3. **Hybrid Search**
-   - Combines dense and sparse search methods:
-     - Dense: Semantic search using FAISS (Inner Product similarity)
-     - Sparse: Lexical matching using TF-IDF
-   - Weighted combination (default: 0.7 dense, 0.3 sparse)
-   - Returns top K most relevant chunks (default: K=5)
-
-4. **Answer Generation**
-   - Takes user question and retrieved context chunks
-   - Limited to 5 most relevant chunks for context window management
-   - Uses Groq's LLM for answer generation
-   - Implements retry logic with exponential backoff
-   - Returns concise, plain text answers
-
-5. **Performance Optimizations**
-   - Parallel processing of document embeddings
-   - Efficient vector similarity search with FAISS
-   - Automatic chunking for optimal context windows
-   - Request/response validation using Pydantic
-   - Comprehensive error handling and logging
-
-### ⚙️ System Configuration
-
-```python
-# Embedding Configuration
-EMBED_DIM = 768  # Dimensionality of Gemini embeddings
-
-# Text Chunking Parameters
-CHUNK_SIZE = 750  # Characters per chunk
-CHUNK_OVERLAP = 150  # Overlap between chunks
-
-# Processing Parameters
-BATCH_SIZE = 10  # Batch size for embedding generation
-TOP_K = 5  # Number of relevant chunks to retrieve
-MAX_DOCS = 5  # Maximum chunks in LLM context
-```
-
-## ⚡ Rate Limiting & Performance
-
-- LLM requests include retry logic with exponential backoff
-- Maximum of 3 retry attempts
-- Backoff multiplier: 1 second
-- Minimum wait time: 4 seconds
-- Maximum wait time: 10 seconds
+-   **Max Retries**: 3
+-   **Min Wait**: 4 seconds
+-   **Max Wait**: 10 seconds

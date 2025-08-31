@@ -10,3 +10,7 @@ tenacity
 scikit-learn
 pydantic
 requests
+langchain
+langchain-community
+langchain-google-genai
+langchain-groq

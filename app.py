@@ -66,7 +66,7 @@ with st.sidebar:
     else:
         st.info("No documents added yet.")
 
-st.markdown("<h1 style='text-align: center;'>📚 RAG Document Assistant</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>📚 RagFlow Agent</h1>", unsafe_allow_html=True)
 
 for entry in st.session_state.chat_history:
     with st.chat_message(entry["role"]):
@@ -93,6 +93,10 @@ else:
 st.markdown("""
 <hr>
 <div style='text-align: center; color: gray;'>
-Built with ❤️ using <a href='https://github.com/rakheshkrishna2005/RagFlow/tree/main/API' target='_blank'>Streamlit + Custom RAG FastAPI</a>
+Built with ❤️ using Streamlit + Custom RAG 
+<a href='https://github.com/rakheshkrishna2005/RagFlow/tree/main/API' 
+   target='_blank' style='text-decoration: none; color: green;'>
+   API
+</a>
 </div>
 """, unsafe_allow_html=True)
