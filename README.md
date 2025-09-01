@@ -25,15 +25,19 @@ RagFlow is a Retrieval Augmented Generation (RAG) API that processes PDF documen
 
 ## 🛠️ Tech Stack
 
-- **Backend**: FastAPI, Uvicorn
-- **Data Validation**: Pydantic
-- **Document Processing**: `pypdf` for text extraction.
-- **ML/RAG Orchestration**: `LangChain` for text splitting, prompts, and LLM integration.
-- **Embeddings**: Google's Gemini (`models/embedding-001`).
-- **LLM**: Groq via `LangChain` (`llama-3.3-70b-versatile`).
-- **Vector Search**: `faiss` for efficient similarity search.
-- **Sparse Retrieval**: `scikit-learn`'s `TfidfVectorizer`.
-- **Utilities**: `numpy`, `python-dotenv`, `tenacity`.
+| Category              | Tool / Library                                      |
+|------------------------|-----------------------------------------------------|
+| Backend               | FastAPI, Uvicorn                                   |
+| Data Validation       | Pydantic                                           |
+| Document Processing   | pypdf (for text extraction)                        |
+| ML/RAG Orchestration  | LangChain (text splitting, prompts, LLM integration)|
+| Embeddings            | Google Gemini (`models/embedding-001`)             |
+| LLM                   | Groq via LangChain (`llama-3.3-70b-versatile`)     |
+| Vector Search         | faiss (efficient similarity search)                 |
+| Sparse Retrieval      | scikit-learn (TfidfVectorizer)                     |
+| Utilities             | numpy, python-dotenv, tenacity                     |
+| Containerization      | Docker                                             |
+| CI/CD                 | GitHub Actions                                     |
 
 ## 🔄 RAG Pipeline Architecture
 
