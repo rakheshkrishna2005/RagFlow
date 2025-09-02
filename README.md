@@ -142,7 +142,7 @@ curl -X 'POST' \
 📑 » Loading PDF from web source: https://arxiv.org/pdf/2005.11401.pdf
 ✨ » PDF loaded successfully
 📝 » Extracting text content
-✂️  » Text split into 114 smart chunks
+✂️ » Text split into 114 smart chunks
 🔎 » Running hybrid search with LangChain EnsembleRetriever
 📚 » Found 5 most relevant chunks
 🤖 » Querying LLM for answer generation
