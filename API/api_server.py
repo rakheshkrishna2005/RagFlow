@@ -194,7 +194,7 @@ async def add_to_index(text: str):
     """
     print("📝 » Extracting text content")
     chunks = chunk_text(text)
-    print(f"✂️  » Text split into {len(chunks)} smart chunks")
+    print(f"✂️ » Text split into {len(chunks)} smart chunks")
     # Store chunk metadata for retrieval
     for chunk in chunks:
         metadatas.append({"text": chunk})
