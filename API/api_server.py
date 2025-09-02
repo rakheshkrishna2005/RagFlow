@@ -298,7 +298,7 @@ async def root():
         Dict: API service information including available endpoints and configuration
     """
     return {
-        "name": "RAG API Server",
+        "name": "RagFlow API",
         "version": "1.0.0",
         "description": "A REST API for Question Answering using RAG (Retrieval Augmented Generation)",
         "endpoints": {
