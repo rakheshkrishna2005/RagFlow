@@ -60,7 +60,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 
 
 # Initialize FastAPI application with metadata
-app = FastAPI(title="RAG API Server")
+app = FastAPI(title="RagFlow API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
