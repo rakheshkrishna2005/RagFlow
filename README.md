@@ -121,7 +121,7 @@ Processes one or more documents and answers a list of questions using the RAG pi
 
 ```bash
 curl -X 'POST' \
-  'https://ragflow-zhoa.onrender.com/v1/run' \
+  'https://rag-flow.onrender.com/v1/run' \
   -H 'accept: application/json' \
   -H 'Authorization: Bearer <api_key>' \
   -H 'Content-Type: application/json' \
